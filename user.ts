@@ -1,4 +1,4 @@
-import { AnyMySqlColumn, InferModel, boolean, mysqlEnum, mysqlTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/mysql-core';
+import { InferModel, boolean, mysqlEnum, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
 import type { AnyMySqlColumnBuilder } from 'drizzle-orm/mysql-core/columns/common';
 
 /*
@@ -21,7 +21,6 @@ export type icingProp = {
     name: string,
     length?: number,
     db: (prop: icingProp) => AnyMySqlColumnBuilder,
-    unique?: boolean,
     enums?: [string, ...string[]],
 }
 
@@ -44,7 +43,6 @@ export const userSchema: icingSchema = {
         },
         {
             name: "username",
-            unique: true,
             length: 60,
             db: (prop: icingProp) => varchar(prop.name, { length: prop.length || 256 }).notNull().default('')
         },
@@ -67,22 +65,10 @@ export const userSchema: icingSchema = {
 
 export const makeTable = (schema: icingSchema) => {
     const columns: Record<string, AnyMySqlColumnBuilder> = {};
-    const uniqueIndexes: Record<string, any> = {};
     for (const prop of schema.props) {
         columns[prop.name] = prop.db(prop);
-        if (prop.unique) {
-            const key = prop.name + 'Index';
-            uniqueIndexes[key] = (table: Record<string, AnyMySqlColumn>) => uniqueIndex(key).on(table[prop.name]);
-        }
     }
-    const extras = (table: Record<string, any>) => {
-        const out: Record<string, any> = {};
-        for (const key in uniqueIndexes) {
-            out[key] = uniqueIndexes[key](table);
-        }
-        return out;
-    }
-    return mysqlTable(schema.tableName, columns, extras)
+    return mysqlTable(schema.tableName, columns) //, extras)
 }
 
 export const users = makeTable(userSchema);
