@@ -68,7 +68,7 @@ export const makeTable = (schema: icingSchema) => {
     for (const prop of schema.props) {
         columns[prop.name] = prop.db(prop);
     }
-    return mysqlTable(schema.tableName, columns) //, extras)
+    return mysqlTable(schema.tableName, columns)
 }
 
 export const users = makeTable(userSchema);
