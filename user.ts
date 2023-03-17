@@ -1,5 +1,5 @@
-import { InferModel, boolean, mysqlEnum, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import type { AnyMySqlColumnBuilder } from 'drizzle-orm/mysql-core/columns/common';
+import { InferModel, MySqlTableWithColumns, boolean, mysqlEnum, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
+import type { AnyMySqlColumnBuilder, BuildColumns } from 'drizzle-orm/mysql-core/columns/common';
 
 /*
 export const users = mysqlTable('users',
@@ -17,58 +17,64 @@ export const users = mysqlTable('users',
 );
 */
 
-export type icingProp = {
-    name: string,
+export interface icingProp<TColumnBuilder extends AnyMySqlColumnBuilder> {
     length?: number,
-    db: (prop: icingProp) => AnyMySqlColumnBuilder,
+    db: (prop: icingProp<never> & { name: string }) => TColumnBuilder,
     enums?: [string, ...string[]],
 }
 
-export type icingSchema = {
-    tableName: string,
-    props: icingProp[],
+export type icingSchema<TName extends string, TProps extends Record<string, icingProp<any>>> = {
+    tableName: TName,
+    props: TProps,
 }
 
-export const userSchema: icingSchema = {
+export function createSchema<TName extends string,  TProps extends Record<string, icingProp<any>>>(schema: icingSchema<TName, TProps>) {
+    return schema;
+}
+
+export const userSchema = createSchema({
     tableName: 'users',
-    props: [
-        {
-            name: "id",
+    props: {
+        id: {
             length: 36,
-            db: (prop: icingProp) => varchar(prop.name, { length: prop.length || 256 }).primaryKey(),
+            db: (prop) => varchar(prop.name, { length: prop.length || 256 }).primaryKey(),
         },
-        {
-            name: "createdAt",
-            db: (prop: icingProp) => timestamp(prop.name).defaultNow().notNull(),
+        createdAt: {
+            db: (prop) => timestamp(prop.name).defaultNow().notNull(),
         },
-        {
-            name: "username",
+        username: {
             length: 60,
-            db: (prop: icingProp) => varchar(prop.name, { length: prop.length || 256 }).notNull().default('')
+            db: (prop) => varchar(prop.name, { length: prop.length || 256 }).notNull().default('')
         },
-        {
-            name: "password",
-            db: (prop: icingProp) => varchar(prop.name, { length: prop.length || 256 }).notNull().default('no-password-specified'),
+        password: {
+            db: (prop) => varchar(prop.name, { length: prop.length || 256 }).notNull().default('no-password-specified'),
         },
-        {
-            name: 'useAsDisplayName',
+        useAsDisplayName: {
             length: 20,
-            db: (prop: icingProp) => mysqlEnum(prop.name, prop.enums || ['']).notNull().default('username'),
+            db: (prop) => mysqlEnum(prop.name, prop.enums as ['username', 'email', 'realName']).notNull().default('username'),
             enums: ['username', 'email', 'realName'],
         },
-        {
-            name: 'admin',
-            db: (prop: icingProp) => boolean(prop.name).notNull().default(false),
+        admin: {
+            db: (prop) => boolean(prop.name).notNull().default(false),
         },
-    ],
-};
+    }
+});
 
-export const makeTable = (schema: icingSchema) => {
+export type MakeDrizzleTable<T extends icingSchema<any, any>> = T extends icingSchema<infer TName, infer TColumns>
+    ? MySqlTableWithColumns<{
+        name: TName;
+        columns: BuildColumns<TName, {
+            [K in keyof TColumns]: TColumns[K] extends icingProp<infer TColumnBuilder> ? TColumnBuilder : never
+        }>;
+    }>
+    : never;
+
+export function makeTable<T extends icingSchema<any, any>>(schema: T): MakeDrizzleTable<T> {
     const columns: Record<string, AnyMySqlColumnBuilder> = {};
     for (const prop of schema.props) {
         columns[prop.name] = prop.db(prop);
     }
-    return mysqlTable(schema.tableName, columns)
+    return mysqlTable(schema.tableName, columns) as MakeDrizzleTable<T>;
 }
 
 export const users = makeTable(userSchema);
